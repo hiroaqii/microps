@@ -3,7 +3,6 @@
 
 #include "net.h"
 
-extern struct net_device *
-dummy_init(void);
+extern struct net_device* dummy_init(void);
 
 #endif
