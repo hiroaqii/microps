@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "net.h"
 #include "platform.h"
 #include "util.h"
 
@@ -74,6 +75,9 @@ static void *intr_thread(void *arg) {
             case SIGHUP:
                 terminate = 1;
                 break;
+            case SIGUSR1:  // ソフトウェア割り込みシグナル
+                net_softirq_handler();
+                break;
             default:
                 // IRQリスとを走査して、IRQ番号が一致するエントリの割り込みハンドラを呼び出す
                 for (entry = irqs; entry; entry = entry->next) {
@@ -126,6 +130,8 @@ int intr_init(void) {
     sigemptyset(&sigmask);  // シグナルの初期化(空にする)
     // シグナルマスクにSIGHUPを追加(割り込み処理スレッドの終了用)
     sigaddset(&sigmask, SIGHUP);
+    // シグナルマスクにSIGUSR1を追加(ソフトウェア割り込み用)
+    sigaddset(&sigmask, SIGUSR1);
 
     return 0;
 }
