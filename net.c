@@ -95,6 +95,11 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len,
 int net_run(void) {
     struct net_device *dev;
 
+    // 割り込みスレッドの起動
+    if (intr_run() == -1) {
+        errorf("intr_run() failure");
+        return -1;
+    }
     debugf("open all devices...");
     for (dev = devices; dev; dev = dev->next) {
         net_device_open(dev);
@@ -110,10 +115,16 @@ void net_shutdown(void) {
     for (dev = devices; dev; dev = dev->next) {
         net_device_close(dev);
     }
+    intr_shutdown();  // 割り込みスレッドの終了
     debugf("shutting down");
 }
 
 int net_init(void) {
+    // 割り込みスレッドの初期化
+    if (intr_init() == -1) {
+        errorf("intr_init() failure");
+        return -1;
+    }
     infof("initialized");
     return 0;
 }
