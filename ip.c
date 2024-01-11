@@ -25,12 +25,20 @@ struct ip_hdr {
     uint8_t options[];
 };
 
+struct ip_protocol {
+    struct ip_protocol *next;
+    uint8_t type;
+    void (*handler)(const uint8_t *data, size_t len, ip_addr_t src,
+                    ip_addr_t dst, struct ip_iface *iface);
+};
+
 const ip_addr_t IP_ADDR_ANY = 0x00000000;       /* 0.0.0.0 */
 const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff; /* 255.255.255.255 */
 
 /* NOTE: if you want to add/delete the entries after net_run(), you need to
  * protect these lists with a mutex. */
 static struct ip_iface *ifaces;  // 登録されている全てのIPインタフェースのリスト
+static struct ip_protocol *protocols;  // 登録されているプロトコルのリスト
 
 // IPアドレスを文字列からネットワークバイトオーダーのバイナリ値に変換
 int ip_addr_pton(const char *p, ip_addr_t *n) {
@@ -163,12 +171,42 @@ struct ip_iface *ip_iface_select(ip_addr_t addr) {
     return entry;
 }
 
+/* NOTE: must not be call after net_run() */
+int ip_protocol_register(uint8_t type,
+                         void (*handler)(const uint8_t *data, size_t len,
+                                         ip_addr_t src, ip_addr_t dst,
+                                         struct ip_iface *iface)) {
+    struct ip_protocol *entry;
+
+    // 指定されたtypeのエントリが既に存在する場合はエラーを返す
+    for (entry = protocols; entry; entry = entry->next) {
+        if (entry->type == type) {
+            errorf("already registered, type=%u", type);
+            return -1;
+        }
+    }
+
+    entry = memory_alloc(sizeof(*entry));
+    if (!entry) {
+        errorf("memory_alloc() failure");
+        return -1;
+    }
+    entry->type = type;
+    entry->handler = handler;
+    entry->next = protocols;
+    protocols = entry;
+
+    infof("registered, type=%u", entry->type);
+    return 0;
+}
+
 static void ip_input(const uint8_t *data, size_t len, struct net_device *dev) {
     struct ip_hdr *hdr;
     uint8_t v;
     uint16_t hlen, total, offset;
     struct ip_iface *iface;
     char addr[IP_ADDR_STR_LEN];
+    struct ip_protocol *proto;
 
     if (len < IP_HDR_SIZE_MIN) {
         errorf("too short");
@@ -229,6 +267,16 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev) {
            ip_addr_ntop(iface->unicast, addr, sizeof(addr)), hdr->protocol,
            total);
     ip_dump(data, total);
+
+    // プロトコルの検索
+    for (proto = protocols; proto; proto = proto->next) {
+        // IPヘッダのプロトコル番号と一致するプロトコルの入力関数を呼び出す（入力関数にはIPデータグラムのペイロードを渡す）
+        if (proto->type == hdr->protocol) {
+            proto->handler((const uint8_t *)(hdr + hlen), total - hlen,
+                           hdr->src, hdr->dst, iface);
+            return;
+        }
+    }
 }
 
 static int ip_output_device(struct ip_iface *iface, const uint8_t *data,

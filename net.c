@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "icmp.h"
 #include "ip.h"
 #include "platform.h"
 #include "util.h"
@@ -250,6 +251,11 @@ int net_init(void) {
     // IPの初期化関数を呼び出す
     if (ip_init() == -1) {
         errorf("ip_init() failure");
+        return -1;
+    }
+    //  ICMPの初期化関数を呼び出す
+    if (icmp_init() == -1) {
+        errorf("icmp_init() failure");
         return -1;
     }
     infof("initialized");
