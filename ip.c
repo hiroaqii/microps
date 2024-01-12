@@ -271,10 +271,12 @@ static void ip_input(const uint8_t *data, size_t len, struct net_device *dev) {
     // プロトコルの検索
     for (proto = protocols; proto; proto = proto->next) {
         // IPヘッダのプロトコル番号と一致するプロトコルの入力関数を呼び出す（入力関数にはIPデータグラムのペイロードを渡す）
-        if (proto->type == hdr->protocol) {
-            proto->handler((const uint8_t *)(hdr + hlen), total - hlen,
-                           hdr->src, hdr->dst, iface);
-            return;
+        for (proto = protocols; proto; proto = proto->next) {
+            if (proto->type == hdr->protocol) {
+                proto->handler((uint8_t *)hdr + hlen, total - hlen, hdr->src,
+                               hdr->dst, iface);
+                return;
+            }
         }
     }
 }
